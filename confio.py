@@ -1,14 +1,24 @@
+import re
+import time
 import pandas as pd
+
 from selenium import webdriver
-from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
-from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver import ActionChains
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException, NoSuchElementException
-import time
+from selenium.common.exceptions import (
+    TimeoutException,
+    ElementNotInteractableException,
+    ElementClickInterceptedException,
+    NoSuchElementException,
+)
 
-# Dicionário de corretores e seus respectivos gerentes (completo)
+# =========================
+# DICIONÁRIO CORRETORES
+# (mantido como você enviou)
+# =========================
 corretores_gerentes = {
     # Versão original
     "almirat": "Dircesantos",
@@ -23,11 +33,10 @@ corretores_gerentes = {
     "Coliseu": "Dircesantos",
     "Jaguar": "Mariano",
     "Lucas": "Mariano",
-    "Sandy": "Azury",
     "Shirlei": "Sandrafrancino",
     "WAGNER": "Dircesantos",
     "Zuppo": "Deli",
-    
+
     # Variações anteriores
     "ANVAL": "Emy",
     "APOLO": "Storm",
@@ -40,14 +49,13 @@ corretores_gerentes = {
     "COLISEU": "Dircesantos",
     "JAGUAR": "Mariano",
     "LUCAS": "Mariano",
-    "SANDY": "Azury",
     "SHIRLEI": "Sandrafrancino",
     "WAGNER": "Dircesantos",
     "ZUPPO": "Deli",
-    
+
     # Novos corretores da lista
     "Zoe": "Toro",
-    "ZOE": "Toro",  # Versão em maiúsculas
+    "ZOE": "Toro",
     "Vida": "Tuguchi",
     "VIDA": "Tuguchi",
     "Veridiana": "Silas",
@@ -70,8 +78,6 @@ corretores_gerentes = {
     "ANJOS": "Serafina",
     "Ava": "Jaar",
     "AVA": "Jaar",
-    "Baronesa": "Camila Ferreira",
-    "BARONESA": "Camila Ferreira",
     "Bill": "Myrna",
     "BILL": "Myrna",
     "Bulgarelli": "Myrna",
@@ -154,19 +160,17 @@ corretores_gerentes = {
     "TAMASHIRO": "Emy",
     "Tatiana": "Silas",
     "TATIANA": "Silas",
-    
+
     # Outros corretores que apareceram nos logs anteriores
     "CERQUEIRA": "Storm",
     "CHARMER": "Dircesantos",
     "DANTAS": "Mariano",
     "DARC": "Sandrafrancino",
-    "DRIKA": "Azury",
     "ELLEN": "Emy",
     "ELOHIM": "Silas",
     "LELLO": "Serafina",
     "MANJON": "Dircesantos",
     "NECHI": "Storm",
-    "PAES": "Azury",
     "PASQUALINA": "Mariano",
     "RAFAELA": "Emy",
     "SENNA": "camacho",
@@ -195,182 +199,224 @@ corretores_gerentes = {
     "Edbol":"Henrika",
     "Avelino":"Dircesantos",
     "Silmara":"Serafina",
+    "Bigode":"Reginaldocarpegiane",
+    "Katllyn":"Ruka",
+    "MION": "SERAFINA",
+    "PIETRA": "LOGAN",
+    "NEUSA": "TUGUCHI",
+    "CHARLOTTE": "MARIANO",
+    "FATIMA": "RUKA",
+    "MION": "Serafina",
+    "PIETRA": "Logan",
+    "NEUSA": "Tuguchi",
+    "CHARLOTTE": "Mariano",
+    "FATIMA": "Ruka",
 }
 
-# ====== INÍCIO – Leitura da nova planilha ======
-arquivo_excel = './ABY-CARPEGIANE(uso).xlsx'          # ← nome do arquivo
-excel_file = pd.ExcelFile(arquivo_excel)
+# =========================
+# LEITURA DA PLANILHA
+# =========================
+arquivo_excel = './ReservaSaoCaetano_0209a08092025_aby[1].xlsx'
+excel_file     = pd.ExcelFile(arquivo_excel)
+nome_planilha  = excel_file.sheet_names[0]
+df             = pd.read_excel(arquivo_excel, sheet_name=nome_planilha)
 
-print("Planilhas no arquivo:", excel_file.sheet_names)
-nome_planilha = excel_file.sheet_names[0]        # usa a 1ª aba; altere se quiser
-print(f"Usando a planilha: {nome_planilha}")
-
-df = pd.read_excel(arquivo_excel, sheet_name=nome_planilha)
-print("Colunas disponíveis:", df.columns.tolist())
-
-# Renomeia colunas da nova planilha para manter compatibilidade
 df = df.rename(columns={
     'CORRETOR ORIGEM': 'CORRETOR DE ORIGEM',
     'TELEFONE'       : 'FONE2',
     'NOME COMPLETO'  : 'NOME'
 })
-# ====== FIM – Leitura da nova planilha ======
 
-# Inicializa o navegador
+# =========================
+# CHROME + HELPERS
+# =========================
 driver = webdriver.Chrome()
 driver.maximize_window()
+wait = WebDriverWait(driver, 20)
 
+def wait_visible(locator, timeout=20):
+    return WebDriverWait(driver, timeout).until(
+        EC.visibility_of_element_located(locator)
+    )
+
+def wait_clickable(locator, timeout=20):
+    return WebDriverWait(driver, timeout).until(
+        EC.element_to_be_clickable(locator)
+    )
+
+def scroll_into_view(el):
+    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", el)
+
+def safe_click(locator):
+    el = wait_visible(locator)
+    scroll_into_view(el)
+    try:
+        wait_clickable(locator)
+        el.click()
+    except (ElementClickInterceptedException, ElementNotInteractableException, TimeoutException):
+        driver.execute_script("arguments[0].click();", el)
+
+# =========================
 # LOGIN
+# =========================
 driver.get("https://abyara.sigavi360.com.br/Acesso/Login?ReturnUrl=%2F")
 time.sleep(2)
 
-email_elem = driver.find_element(By.XPATH, "/html/body/div[2]/section/div[1]/div/div/div/form/div[1]/div[1]/div/input")
-email_elem.send_keys("pegomessouza@gmail.com")
-
-senha_elem = driver.find_element(By.XPATH, "/html/body/div[2]/section/div[1]/div/div/div/form/div[1]/div[2]/div/input")
-senha_elem.send_keys("123456")
-
-btn_elem = driver.find_element(By.XPATH, "/html/body/div[2]/section/div[1]/div/div/div/form/div[1]/div[3]/div/button")
-btn_elem.click()
+wait_visible((By.XPATH, "/html/body/div[2]/section/div[1]/div/div/div/form/div[1]/div[1]/div/input"))\
+    .send_keys("pegomessouza@gmail.com")
+wait_visible((By.XPATH, "/html/body/div[2]/section/div[1]/div/div/div/form/div[1]/div[2]/div/input"))\
+    .send_keys("123456")
+safe_click((By.XPATH, "/html/body/div[2]/section/div[1]/div/div/div/form/div[1]/div[3]/div/button"))
 time.sleep(2)
 
-# CAMINHO PARA A PÁGINA CERTA
+# =========================
+# LOOP DE CADASTRO
+# =========================
 driver.get('https://abyara.sigavi360.com.br/CRM/Fac')
 time.sleep(2)
 
-# ====== LOOP PARA FAZER A AUTOMAÇÃO ======
+# mapa para tolerar variações de caixa no dicionário
+mapa_corretores = {str(k).upper(): v for k, v in corretores_gerentes.items()}
+
 for index, row in df.iterrows():
-    nome = str(row['NOME'])
-    telefone = str(row['FONE2'])
-    corretor_original = str(row['CORRETOR DE ORIGEM']).strip()
-    
-    if corretor_original not in corretores_gerentes:
-        print(f"Corretor '{corretor_original}' não encontrado. Pulando {nome}.")
+    nome = str(row.get('NOME') or '').strip()
+
+    # sanitiza telefone (só dígitos)
+    telefone_raw = str(row.get('FONE2') or '')
+    telefone = re.sub(r'\D', '', telefone_raw)
+
+    corretor_original_raw = str(row.get('CORRETOR DE ORIGEM') or '')
+    corretor_original_norm = re.sub(r'\s+', ' ', corretor_original_raw).strip().upper()
+
+    if corretor_original_norm not in mapa_corretores:
+        print(f"Corretor '{corretor_original_raw}' não encontrado. Pulando {nome}.")
         continue
-    
-    gerente = corretores_gerentes[corretor_original]
-    corretor = corretor_original
-    
+
+    gerente  = mapa_corretores[corretor_original_norm]
+    corretor = corretor_original_raw.strip()  # mantém como veio na planilha para digitar no dropdown
+
     print(f"Processando: {nome} - {telefone} | Corretor: {corretor} | Gerente: {gerente}")
-    
+
+    # Página de busca (apenas preenche telefone; não valida duplicidade aqui)
     driver.get('https://abyara.sigavi360.com.br/CRM/Fac')
     time.sleep(3)
-    
-    telefone_elem = driver.find_element(By.XPATH, '/html/body/section/section/div/div/div[2]/div/div[1]/form/div[2]/div/div/div/div[10]/div[4]/input')
-    ActionChains(driver).click(on_element=telefone_elem)\
+
+    telefone_busca_locator = (By.XPATH, '/html/body/section/section/div/div/div[2]/div/div[1]/form/div[2]/div/div/div/div[10]/div[4]/input')
+    telefone_elem_busca = wait_visible(telefone_busca_locator)
+    scroll_into_view(telefone_elem_busca)
+
+    # limpa e digita
+    ActionChains(driver)\
+        .click(on_element=telefone_elem_busca)\
         .key_down(Keys.CONTROL).send_keys('a').key_up(Keys.CONTROL)\
         .send_keys(Keys.DELETE)\
         .send_keys(telefone)\
         .perform()
-    
-    ActionChains(driver).send_keys(Keys.ARROW_DOWN).perform()
-    time.sleep(0.5)
-    ActionChains(driver).send_keys(Keys.ARROW_DOWN).perform()
-    time.sleep(0.5)
-    
-    driver.find_element(By.XPATH, '//*[@id="cmdBusca"]').click()
-    time.sleep(3)
-    
-    cliente_existe = False
-    try:
-        outra_pagina = WebDriverWait(driver, 9).until(
-            EC.presence_of_element_located((By.XPATH, '/html/body/section/section/div/div/div[2]/div/div[2]'))
-        )
-        cliente_existe = outra_pagina.value_of_css_property("display") == "block"
-    except (TimeoutException, NoSuchElementException):
-        cliente_existe = False
 
-    if cliente_existe:
-        print(f"Cliente {nome} já existe. Nova busca.")
-        time.sleep(2)
-        try:
-            driver.find_element(By.XPATH, '/html/body/section/section/div/div/div[2]/div/div[2]/div[1]/div[1]/button').click()
-            time.sleep(2)
-        except Exception as e:
-            print(f"Erro ao clicar nova busca: {e}")
-    
-    else:
-        print(f"Cadastrando novo cliente: {nome}")
-        driver.get('https://abyara.sigavi360.com.br/CRM/Fac/Cadastro')
-        time.sleep(2)
-        
-        driver.find_element(By.ID, 'Nome').send_keys(nome)
-        time.sleep(2)
-        
-        driver.find_element(By.XPATH, '/html/body/div[2]/form/div[2]/div/div/div[1]/div[2]/div[1]/div/div/a').click()
-        time.sleep(2)
-        
-        celular_elem = driver.find_element(By.XPATH, '/html/body/div[2]/form/div[2]/div/div/div[1]/div[2]/div[1]/div/table/tbody/tr/td[1]/span[1]/span/span[1]')
-        celular_elem.click()
-        ActionChains(driver).send_keys(Keys.ARROW_DOWN, Keys.ARROW_DOWN, Keys.ENTER).perform()
-        
-        telefone_elem = driver.find_element(By.XPATH,'/html/body/div[2]/form/div[2]/div/div/div[1]/div[2]/div[1]/div/table/tbody/tr/td[3]/input')
-        ActionChains(driver).click(on_element=telefone_elem)\
-            .key_down(Keys.CONTROL).send_keys('a').key_up(Keys.CONTROL)\
-            .send_keys(Keys.DELETE).send_keys(telefone).perform()
-        time.sleep(2)
-        
-        driver.find_element(By.XPATH, '/html/body/div[2]/form/div[2]/div/div/div[1]/div[2]/div[1]/div/table/tbody/tr/td[4]/a[1]/span').click()
-        time.sleep(2)
-        
-        sms_elem = driver.find_element(By.XPATH, '/html/body/div[2]/form/div[3]/div/div/div[1]/div[1]/div[1]/div[1]/div[1]/span[2]/span/span[1]')
-        sms_elem.click()
-        ActionChains(driver).send_keys(Keys.ARROW_DOWN, Keys.ENTER).perform()
-        time.sleep(2)
-        
-        midia_elem = driver.find_element(By.XPATH, '/html/body/div[2]/form/div[3]/div/div/div[1]/div[1]/div[1]/div[1]/div[2]/span[2]/span/span[1]')
-        midia_elem.click()
-        ActionChains(driver).send_keys(Keys.ARROW_DOWN, Keys.ARROW_DOWN, Keys.ARROW_DOWN, Keys.ARROW_DOWN, Keys.ENTER).perform()
-        time.sleep(2)
-        
-        equipe_elem = driver.find_element(By.XPATH, '/html/body/div[2]/form/div[3]/div/div/div[1]/div[1]/div[1]/div[2]/div[1]/span[1]/span/span[1]')
-        equipe_elem.click()
-        ActionChains(driver).send_keys(gerente, Keys.ENTER).perform()
-        time.sleep(1)
-        
-        corretor_elem = driver.find_element(By.XPATH, '/html/body/div[2]/form/div[3]/div/div/div[1]/div[1]/div[1]/div[2]/div[2]/div[1]/span[1]/span/span[1]')
-        corretor_elem.click()
-        ActionChains(driver).send_keys(corretor, Keys.ENTER).perform()
-        time.sleep(1)
-        
-        driver.find_element(By.XPATH, "/html/body/div[2]/form/div[3]/div/div/div[1]/div[2]/div[2]/a/span").click()
-        time.sleep(2)
-        
-        driver.find_element(By.XPATH, "/html/body/div[2]/div[2]/div/div/div[2]/div[1]/div/div/label[2]").click()
-        time.sleep(2)
-        
-        your_code = driver.find_element(By.XPATH, "/html/body/div[2]/div[2]/div/div/div[2]/div[3]/div[1]/input")
-        your_code.clear()
-        your_code.send_keys("reserva paraiso")
-        time.sleep(2)
-        
-        driver.find_element(By.XPATH, "/html/body/div[2]/div[2]/div/div/div[2]/div[3]/div[2]/button").click()
-        time.sleep(2)
-        
-        WebDriverWait(driver, 10).until(
-            EC.element_to_be_clickable((By.CSS_SELECTOR, "#dvImovelOrigemComando a"))
-        ).click()
-        time.sleep(2)
-        
-        driver.find_element(By.XPATH, "/html/body/div[2]/form/div[1]/div/div[1]/button[2]").click()
-        time.sleep(5)
-        
-        try:
-            dup = WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located((By.XPATH, '/html/body/div[2]/div[8]'))
-            )
-            if dup.value_of_css_property("display") == "none":
-                driver.find_element(By.XPATH, "/html/body/div[2]/form/div[1]/div/div[1]/button[1]").click()
-                print(f"Cliente {nome} cadastrado com sucesso!")
-                time.sleep(5)
-            else:
-                print(f"Cliente {nome} já existe (duplicidade).")
-        except:
-            print("Erro na verificação de duplicidade.")
-        
-        finally:
-            driver.get("https://abyara.sigavi360.com.br/CRM/Fac/")
-            time.sleep(2)
+    # navegação leve (como no seu script)
+    ActionChains(driver).send_keys(Keys.ARROW_DOWN).perform()
+    time.sleep(0.5)
+    ActionChains(driver).send_keys(Keys.ARROW_DOWN).perform()
+    time.sleep(0.5)
+
+    # Vai direto ao cadastro
+    driver.get('https://abyara.sigavi360.com.br/CRM/Fac/Cadastro')
+    time.sleep(2)
+
+    # === BLOCO CADASTRO ===
+    wait_visible((By.ID, 'Nome')).send_keys(nome)
+    time.sleep(1)
+
+    # Abre o bloco de telefones
+    safe_click((By.XPATH, '/html/body/div[2]/form/div[2]/div/div/div[1]/div[2]/div[1]/div/div/a'))
+    time.sleep(1)
+
+    # Seleciona "Celular" no tipo (setas + enter)
+    celular_combo_locator = (By.XPATH, '/html/body/div[2]/form/div[2]/div/div/div[1]/div[2]/div[1]/div/table/tbody/tr/td[1]/span[1]/span/span[1]')
+    safe_click(celular_combo_locator)
+    ActionChains(driver).send_keys(Keys.ARROW_DOWN, Keys.ARROW_DOWN, Keys.ENTER).perform()
+
+    # Preenche número
+    telefone_grid_input_locator = (By.XPATH, '/html/body/div[2]/form/div[2]/div/div/div[1]/div[2]/div[1]/div/table/tbody/tr/td[3]/input')
+    tel_input = wait_visible(telefone_grid_input_locator)
+    ActionChains(driver)\
+        .click(on_element=tel_input)\
+        .key_down(Keys.CONTROL).send_keys('a').key_up(Keys.CONTROL)\
+        .send_keys(Keys.DELETE).send_keys(telefone)\
+        .perform()
+    time.sleep(1)
+
+    # Adiciona telefone (ícone de +/confirmar)
+    safe_click((By.XPATH, '/html/body/div[2]/form/div[2]/div/div/div[1]/div[2]/div[1]/div/table/tbody/tr/td[4]/a[1]/span'))
+    time.sleep(1)
+
+    # Canal (SMS)
+    sms_combo_locator = (By.XPATH, '/html/body/div[2]/form/div[3]/div/div/div[1]/div[1]/div[1]/div[1]/div[1]/span[2]/span/span[1]')
+    safe_click(sms_combo_locator)
+    ActionChains(driver).send_keys(Keys.ARROW_DOWN, Keys.ENTER).perform()
+    time.sleep(1)
+
+    # Mídia
+    midia_combo_locator = (By.XPATH, '/html/body/div[2]/form/div[3]/div/div/div[1]/div[1]/div[1]/div[1]/div[2]/span[2]/span/span[1]')
+    safe_click(midia_combo_locator)
+    # várias setas para selecionar (mantido)
+    ActionChains(driver)\
+        .send_keys(Keys.ARROW_DOWN, Keys.ARROW_DOWN, Keys.ARROW_DOWN, Keys.ARROW_DOWN,
+                   Keys.ARROW_DOWN, Keys.ARROW_DOWN, Keys.ARROW_DOWN, Keys.ARROW_DOWN,
+                   Keys.ARROW_DOWN, Keys.ARROW_DOWN, Keys.ARROW_DOWN, Keys.ARROW_DOWN,
+                   Keys.ARROW_DOWN, Keys.ARROW_DOWN, Keys.ARROW_DOWN, Keys.ARROW_DOWN,
+                   Keys.ARROW_DOWN, Keys.ARROW_DOWN, Keys.ARROW_DOWN, Keys.ENTER)\
+        .perform()
+    time.sleep(1)
+
+    # Equipe (gerente)
+    equipe_combo_locator = (By.XPATH, '/html/body/div[2]/form/div[3]/div/div/div[1]/div[1]/div[1]/div[2]/div[1]/span[1]/span/span[1]')
+    safe_click(equipe_combo_locator)
+    ActionChains(driver).send_keys(gerente, Keys.ENTER).perform()
+    time.sleep(0.8)
+
+    # Corretor
+    corretor_combo_locator = (By.XPATH, '/html/body/div[2]/form/div[3]/div/div/div[1]/div[1]/div[1]/div[2]/div[2]/div[1]/span[1]/span/span[1]')
+    safe_click(corretor_combo_locator)
+    ActionChains(driver).send_keys(corretor, Keys.ENTER).perform()
+    time.sleep(0.8)
+
+    # Abre modal "Imóvel/Origem"
+    safe_click((By.XPATH, "/html/body/div[2]/form/div[3]/div/div/div[1]/div[2]/div[2]/a/span"))
+    modal_container = wait_visible((By.XPATH, "/html/body/div[2]/div[2]/div/div"))
+
+    # Seleciona a opção dentro do modal
+    safe_click((By.XPATH, "/html/body/div[2]/div[2]/div/div/div[2]/div[1]/div/div/label[2]"))
+
+    # Preenche o código/descrição
+    your_code_input_locator = (By.XPATH, "/html/body/div[2]/div[2]/div/div/div[2]/div[3]/div[1]/input")
+    your_code = wait_visible(your_code_input_locator)
+    your_code.clear()
+    your_code.send_keys("Reserva São Caetano")
+    time.sleep(0.5)
+
+    # Confirma modal
+    safe_click((By.XPATH, "/html/body/div[2]/div[2]/div/div/div[2]/div[3]/div[2]/button"))
+    time.sleep(1)
+
+    # Botão que às vezes fica atrás de overlay
+    safe_click((By.CSS_SELECTOR, "#dvImovelOrigemComando a"))
+    time.sleep(1)
+
+    # 1) Confirmação inicial do formulário
+    safe_click((By.XPATH, "/html/body/div[2]/form/div[1]/div/div[1]/button[2]"))
+    time.sleep(2)
+
+    # 2) Tenta fechar popup de duplicidade (se existir)
+    try:
+        safe_click((By.XPATH, '//*[@id="popVerificaDuplicidade"]/div/div/div[3]/button'))
+        time.sleep(0.5)
+    except Exception:
+        pass
+
+    # 3) Salvar
+    safe_click((By.XPATH, '//*[@id="cmdSalva"]'))
+    time.sleep(3)
 
 print("Processamento concluído!")
 driver.quit()
