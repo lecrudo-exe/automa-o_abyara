@@ -216,7 +216,7 @@ corretores_gerentes = {
 # =========================
 # LEITURA DA PLANILHA
 # =========================
-arquivo_excel = './ReservaSaoCaetano_0209a08092025_aby[1].xlsx'
+arquivo_excel = './SP360_2204a08092025_aby.xlsx'
 excel_file     = pd.ExcelFile(arquivo_excel)
 nome_planilha  = excel_file.sheet_names[0]
 df             = pd.read_excel(arquivo_excel, sheet_name=nome_planilha)
@@ -392,7 +392,7 @@ for index, row in df.iterrows():
     your_code_input_locator = (By.XPATH, "/html/body/div[2]/div[2]/div/div/div[2]/div[3]/div[1]/input")
     your_code = wait_visible(your_code_input_locator)
     your_code.clear()
-    your_code.send_keys("Reserva São Caetano")
+    your_code.send_keys("SP")
     time.sleep(0.5)
 
     # Confirma modal
