@@ -1,9 +1,11 @@
 [
   {
-    "totalCorretores": 860,
+    "totalCorretores": 863,
     "corretoresEquipes": {
       "4U REAL ESTATE LTDA ME": "Geexterno",
       "Abraao": "Lauriany",
+      "Adam": "Ruka",
+      "Adam-DV": "Ruka",
       "Abygail-RH": "Deli",
       "Accioly": "Henrika",
       "Adalberto-RH": "Kimbol",
@@ -861,7 +863,8 @@
       "Zanza": "Flaviabrugnara",
       "Zara-RH": "Linhares",
       "Zeus-IND": "Azury",
-      "Zoe-Dv": "Toro"
+      "Zoe-Dv": "Toro",
+      "Graziel": "Kimbol"
     }
   }
 ]

@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \":*)",
+      "Bash(pip install:*)",
+      "Bash(python -m pip install openpyxl -q)",
+      "Bash(python -m pip install selenium pandas openpyxl)"
+    ]
+  }
+}
